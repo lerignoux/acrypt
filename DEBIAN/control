@@ -1,0 +1,7 @@
+Package: acrypt
+Version: 1.0
+Section: utils
+Maintainer: Arvatarox <arvatarox@aim.com>
+Architecture: all
+Depends: python, ccrypt
+Description: Utility for ccrypt to access custom password file
