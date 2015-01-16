@@ -141,5 +141,9 @@ if __name__ == '__main__':
         print manager.update_password(args[0], options.update_password)
         sys.exit(0)
     if args:
-        password = manager.get_password(args[0])
+        request = args[0]
+    else:
+        request = raw_input('password requested :')
+
+    password = manager.get_password(request)
     sys.exit(0)
