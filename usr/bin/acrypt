@@ -1,0 +1,145 @@
+#!/usr/bin/python
+
+import sys
+import os
+import logging
+import gtk
+import gobject
+import getpass
+from subprocess import PIPE, Popen
+import yaml
+from optparse import OptionParser
+from contextlib import contextmanager
+
+from datetime import datetime
+import re
+from shutil import copyfile
+
+import time
+
+
+class PasswordMgr(object):
+
+    clipboard = gtk.clipboard_get()
+    storage_folder = '/home/{username}/Perso'.format(username=getpass.getuser())
+    storage_file = 'Pass.yml.cpt'
+    temp_file = 'Pass.yml'
+    backup_file = '.Pass_{:%Y_%m_%d_%H_%M_%S}.yml.cpt'
+    pass_key = 'pass'
+    verbose = False
+    display = False
+
+    def __init__(self, options):
+        self.debug = options.verbose
+        self.display = options.display
+        self.storage_loc = '/'.join([self.storage_folder, self.storage_file])
+        self.temp_loc = '/'.join([self.storage_folder, self.temp_file])
+        if self.debug:
+            logging.getLogger('').setLevel(logging.DEBUG)
+
+    @contextmanager
+    def _open_all(self, filename=None):
+        filename = filename or self.storage_loc
+        try:
+            print '\n'
+            read = Popen(["ccrypt", "-c", filename], stdout=PIPE)
+            full = {}
+            for yml in yaml.load_all(read.communicate()[0]):
+                full.update(yml)
+            yield full
+        finally:
+            del full
+
+    def _search_entry(self, yml, item):
+        for entry in yml.iterkeys():
+            logging.debug("searching item %s in entry %s" % (item, entry))
+            if re.search(item, entry, re.IGNORECASE):
+                return yml[entry]
+        raise Exception('key %s not found.' % item)
+
+    def _search_password(self, yml, password):
+        try:
+            return self._search_entry(yml, password)[self.pass_key]
+        except KeyError:
+            raise Exception('key %s does not contain any password' % password)
+
+    def _paste_password(self, string):
+        if self.display:
+            logging.debug("password found : %s" % string)
+        self.clipboard.set_text(string)
+        self.clipboard.store()
+        gobject.timeout_add(100, gtk.main_quit)
+        gtk.main()
+
+    def _backup_file(self):
+        backup_loc = '/'.join([self.storage_folder, self.backup_file.format(datetime.now())])
+        logging.debug('backuping file %s as %s' % (self.storage_loc, backup_loc))
+        copyfile(self.storage_loc, backup_loc)
+
+    def get_keys(self, item):
+        with self._open_all() as yml:
+            for entry in yml.iterkeys():
+                if re.search(item, entry, re.IGNORECASE):
+                    return yml[entry].keys()
+
+    def get_password(self, name):
+        with self._open_all() as pass_dict:
+            password = self._search_password(pass_dict, name)
+            self._paste_password(password)
+
+    def list_passwords(self):
+        with self._open_all() as pass_dict:
+            return pass_dict.keys()
+
+    def update_password(self, name, new_password):
+        logging.info("updating password currently not supported")
+        return
+        master_pass = getpass.getpass('Password:')
+        self._backup_file()
+        logging.info("updating password %s with %s" % (name, new_password))
+        logging.info("decrypting file %s" % self.storage_loc)
+        decrypt = Popen(["ccrypt", "-d", "-f", self.storage_loc], stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
+        #logging.info(decrypt.communicate("%s\n%s\n" %( master_pass, master_pass))[0])
+        # ccrypt reading from tty, must write to it
+        tty_path = "/dev/pts/2"
+        tty = os.open(tty_path, os.O_RDWR)
+        os.write(tty, "%s\n" % master_pass)
+        os.write(tty, "%s\n" % master_pass)
+        # writing twice on stdin ?
+        decrypt.stderr.write("%s\n" % master_pass)
+        decrypt.stderr.write("%s\n" % master_pass)
+        logging.info("file decrypted")
+
+        _ = getpass.getpass('Reencrypting ?')
+
+        encrypt = Popen(["ccrypt", "-e", self.temp_loc], stdout=PIPE, stdin=PIPE, shell=False)
+        #logging.info(encrypt.stdout.readline())
+        encrypt.stdin.write("%s\n" % master_pass)
+        #logging.info(encrypt.stdout.readline())
+        encrypt.stdin.write("%s\n" % master_pass)
+        #logging.info(encrypt.stdout.readline())
+        logging.info("file encrypted")
+
+
+if __name__ == '__main__':
+    parser = OptionParser()
+    parser.add_option("-l", "--list", dest="list", action="store_true", default=False, help="List available passwords")
+    parser.add_option("-k", "--listkeys", dest="list_keys", default=False, help="List keys available for this entry")
+    parser.add_option("-u", "--update", dest="update_password", default=False, help="List keys available for this entry")
+    parser.add_option("-v", "--verbose", action="store_true", dest="verbose", default=False, help="Print status messages and logs to stdout")
+    parser.add_option("-p", "--print", action="store_true", dest="display", help="Show password directly in output and not in clipboard", default=False)
+
+    (options, args) = parser.parse_args()
+    manager = PasswordMgr(options)
+    if options.list:
+        print manager.list_passwords()
+        sys.exit(0)
+    if options.list_keys:
+        print manager.get_keys(options.list_keys)
+        sys.exit(0)
+    if options.update_password:
+        print manager.update_password(args[0], options.update_password)
+        sys.exit(0)
+    if args:
+        password = manager.get_password(args[0])
+    sys.exit(0)
