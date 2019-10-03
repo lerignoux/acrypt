@@ -15,8 +15,6 @@ from datetime import datetime
 import re
 from shutil import copyfile
 
-import time
-
 
 class PasswordMgr(object):
 
@@ -41,7 +39,7 @@ class PasswordMgr(object):
     def _open_all(self, filename=None):
         filename = filename or self.storage_loc
         try:
-            print '\n'
+            print('\n')
             read = Popen(["ccrypt", "-c", filename], stdout=PIPE)
             full = {}
             for yml in yaml.load_all(read.communicate()[0]):
@@ -99,7 +97,7 @@ class PasswordMgr(object):
         logging.info("updating password %s with %s" % (name, new_password))
         logging.info("decrypting file %s" % self.storage_loc)
         decrypt = Popen(["ccrypt", "-d", "-f", self.storage_loc], stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
-        #logging.info(decrypt.communicate("%s\n%s\n" %( master_pass, master_pass))[0])
+        # logging.info(decrypt.communicate("%s\n%s\n" %( master_pass, master_pass))[0])
         # ccrypt reading from tty, must write to it
         tty_path = "/dev/pts/2"
         tty = os.open(tty_path, os.O_RDWR)
@@ -113,11 +111,11 @@ class PasswordMgr(object):
         _ = getpass.getpass('Reencrypting ?')
 
         encrypt = Popen(["ccrypt", "-e", self.temp_loc], stdout=PIPE, stdin=PIPE, shell=False)
-        #logging.info(encrypt.stdout.readline())
+        # logging.info(encrypt.stdout.readline())
         encrypt.stdin.write("%s\n" % master_pass)
-        #logging.info(encrypt.stdout.readline())
+        # logging.info(encrypt.stdout.readline())
         encrypt.stdin.write("%s\n" % master_pass)
-        #logging.info(encrypt.stdout.readline())
+        # logging.info(encrypt.stdout.readline())
         logging.info("file encrypted")
 
 
@@ -132,18 +130,18 @@ if __name__ == '__main__':
     (options, args) = parser.parse_args()
     manager = PasswordMgr(options)
     if options.list:
-        print manager.list_passwords()
+        print(manager.list_passwords())
         sys.exit(0)
     if options.list_keys:
-        print manager.get_keys(options.list_keys)
+        print(manager.get_keys(options.list_keys))
         sys.exit(0)
     if options.update_password:
-        print manager.update_password(args[0], options.update_password)
+        print(manager.update_password(args[0], options.update_password))
         sys.exit(0)
     if args:
         request = args[0]
     else:
-        request = raw_input('password requested :')
+        request = input('password requested :')
 
     password = manager.get_password(request)
     sys.exit(0)
